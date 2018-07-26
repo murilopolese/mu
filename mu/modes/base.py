@@ -329,3 +329,95 @@ class MicroPythonMode(BaseMode):
         """
         self.remove_repl()
         super().on_data_flood()
+
+class MultiBoardBase(BaseMode):
+    """
+    Includes functionality that works with a USB serial based REPL.
+    """
+    force_interrupt = True
+
+    def find_device(self, with_logging=True):
+        """
+        Returns the port and serial number for the first MicroPython-ish device
+        found connected to the host computer. If no device is found, returns
+        the tuple (None, None).
+        """
+        available_ports = QSerialPortInfo.availablePorts()
+        for port in available_ports:
+            pid = port.productIdentifier()
+            vid = port.vendorIdentifier()
+            # Check if there is a valid serial port available
+            if pid != 0 and vid != 0:
+                port_name = port.portName()
+                serial_number = port.serialNumber()
+                if with_logging:
+                    logger.info('Found device on port: {}'.format(port_name))
+                    logger.info('Serial number: {}'.format(serial_number))
+                return (self.port_path(port_name), serial_number)
+        if with_logging:
+            logger.warning('Could not find device.')
+            logger.debug('Available ports:')
+            logger.debug(['PID:{} VID:{} PORT:{}'.format(p.productIdentifier(),
+                                                         p.vendorIdentifier(),
+                                                         p.portName())
+                         for p in available_ports])
+        return (None, None)
+
+    def port_path(self, port_name):
+        if os.name == 'posix':
+            # If we're on Linux or OSX reference the port is like this...
+            return "/dev/{}".format(port_name)
+        elif os.name == 'nt':
+            # On Windows simply return the port (e.g. COM0).
+            return port_name
+        else:
+            # No idea how to deal with other OS's so fail.
+            raise NotImplementedError('OS "{}" not supported.'.format(os.name))
+
+    def toggle_repl(self, event):
+        """
+        Toggles the REPL on and off.
+        """
+        if self.repl:
+            self.remove_repl()
+            logger.info('Toggle REPL off.')
+        else:
+            self.add_repl()
+            logger.info('Toggle REPL on.')
+
+    def remove_repl(self):
+        """
+        If there's an active REPL, disconnect and hide it.
+        """
+        self.view.remove_repl()
+        self.repl = False
+
+    def add_repl(self):
+        """
+        Detect a connected MicroPython based device and, if found, connect to
+        the REPL and display it to the user.
+        """
+        device_port, serial_number = self.find_device()
+        if device_port:
+            try:
+                self.view.add_micropython_repl(device_port, self.name,
+                                               self.force_interrupt)
+                logger.info('Started REPL on port: {}'.format(device_port))
+                self.repl = True
+            except IOError as ex:
+                logger.error(ex)
+                self.repl = False
+                info = _("Click on the device's reset button, wait a few"
+                         " seconds and then try again.")
+                self.view.show_message(str(ex), info)
+            except Exception as ex:
+                logger.error(ex)
+        else:
+            message = _('Could not find an attached device.')
+            information = _('Please make sure the device is plugged into this'
+                            ' computer.\n\nIt must have a version of'
+                            ' MicroPython (or CircuitPython) flashed onto it'
+                            ' before the REPL will work.\n\nFinally, press the'
+                            " device's reset button and wait a few seconds"
+                            ' before trying again.')
+            self.view.show_message(message, information)
