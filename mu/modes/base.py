@@ -209,8 +209,7 @@ class MicroPythonMode(BaseMode):
         for port in available_ports:
             pid = port.productIdentifier()
             vid = port.vendorIdentifier()
-            # Look for the port VID & PID in the list of know board IDs
-            if not self.valid_boards or (vid, pid) in self.valid_boards:
+            if (vid, pid) in self.valid_boards:
                 port_name = port.portName()
                 serial_number = port.serialNumber()
                 if with_logging:
