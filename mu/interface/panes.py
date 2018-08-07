@@ -233,32 +233,33 @@ class MicroPythonREPLPane(QTextEdit):
                 m = re.search(r'(?P<count>[\d]*)(?P<action>[ABCDK])',
                               data[i:].decode('utf-8'))
 
-                # move to (almost) after control seq (will ++ at end of loop)
-                i += m.end() - 1
+                if m:
+                    # move to (almost) after control seq (will ++ at end of loop)
+                    i += m.end() - 1
 
-                if m.group("count") == '':
-                    count = 1
-                else:
-                    count = int(m.group("count"))
+                    if m.group("count") == '':
+                        count = 1
+                    else:
+                        count = int(m.group("count"))
 
-                if m.group("action") == "A":  # up
-                    tc.movePosition(QTextCursor.Up, n=count)
-                    self.setTextCursor(tc)
-                elif m.group("action") == "B":  # down
-                    tc.movePosition(QTextCursor.Down, n=count)
-                    self.setTextCursor(tc)
-                elif m.group("action") == "C":  # right
-                    tc.movePosition(QTextCursor.Right, n=count)
-                    self.setTextCursor(tc)
-                elif m.group("action") == "D":  # left
-                    tc.movePosition(QTextCursor.Left, n=count)
-                    self.setTextCursor(tc)
-                elif m.group("action") == "K":  # delete things
-                    if m.group("count") == "":  # delete to end of line
-                        tc.movePosition(QTextCursor.EndOfLine,
-                                        mode=QTextCursor.KeepAnchor)
-                        tc.removeSelectedText()
+                    if m.group("action") == "A":  # up
+                        tc.movePosition(QTextCursor.Up, n=count)
                         self.setTextCursor(tc)
+                    elif m.group("action") == "B":  # down
+                        tc.movePosition(QTextCursor.Down, n=count)
+                        self.setTextCursor(tc)
+                    elif m.group("action") == "C":  # right
+                        tc.movePosition(QTextCursor.Right, n=count)
+                        self.setTextCursor(tc)
+                    elif m.group("action") == "D":  # left
+                        tc.movePosition(QTextCursor.Left, n=count)
+                        self.setTextCursor(tc)
+                    elif m.group("action") == "K":  # delete things
+                        if m.group("count") == "":  # delete to end of line
+                            tc.movePosition(QTextCursor.EndOfLine,
+                                            mode=QTextCursor.KeepAnchor)
+                            tc.removeSelectedText()
+                            self.setTextCursor(tc)
             elif data[i] == 10:  # \n
                 tc.movePosition(QTextCursor.End)
                 self.setTextCursor(tc)
