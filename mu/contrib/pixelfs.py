@@ -254,14 +254,15 @@ def get(filename, target=None, serial=None):
         "import os",
         "f = open('{}', 'rb')".format(filename),
         "r = f.read",
-        "result = True",
-        "while result:\n result = r(32)\n if result:\n  print(result)\n",
+        "result = ''",
+        "output = True",
+        "while output:\n output = r(32)\n if output:\n  result += output.decode('utf-8')\n",
         "f.close()",
+        "print(result)",
     ]
     out, err = execute(commands, serial)
     if err:
         raise IOError(clean_error(err))
-    # Recombine the bytes while removing "b'" from start and "'" from end.
     with open(target, 'wb') as f:
         f.write(out)
     return True
