@@ -455,7 +455,7 @@ class FileSystemPane(QFrame):
         layout = QGridLayout()
         self.setLayout(layout)
         microbit_label = QLabel()
-        microbit_label.setText(_('Files on your micro:bit:'))
+        microbit_label.setText(_('Files on your board:'))
         local_label = QLabel()
         local_label.setText(_('Files on your computer:'))
         self.microbit_label = microbit_label

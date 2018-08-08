@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This module contains functions for running remote commands on the BBC micro:bit
+This module contains functions for running remote commands on the Pixel Kit
 relating to file system based operations.
 
 You may:
@@ -29,7 +29,7 @@ __all__ = ['ls', 'rm', 'put', 'get', 'get_serial']
 
 #: The help text to be shown when requested.
 _HELP_TEXT = """
-Interact with the basic filesystem on a connected BBC micro:bit device.
+Interact with the basic filesystem on a connected Pixel Kit device.
 You may use the following commands:
 
 'ls' - list files on the device (based on the equivalent Unix command);
@@ -37,7 +37,7 @@ You may use the following commands:
 'put' - copy a named local file onto the device just like the FTP command; and,
 'get' - copy a named file from the device to the local file system a la FTP.
 
-For example, 'ufs ls' will list the files on a connected BBC micro:bit.
+For example, 'ufs ls' will list the files on a connected Pixel Kit.
 """
 
 
@@ -47,7 +47,7 @@ COMMAND_LINE_FLAG = False  # Indicates running from the command line.
 def find_pixelkit():
     """
     Returns a tuple representation of the port and serial number for a
-    connected micro:bit device. If no device is connected the tuple will be
+    connected Pixel Kit device. If no device is connected the tuple will be
     (None, None).
     """
     ports = list_serial_ports()
@@ -114,14 +114,14 @@ def get_serial():
 
 def execute(commands, serial=None):
     """
-    Sends the command to the connected micro:bit via serial and returns the
+    Sends the command to the connected Pixel Kit via serial and returns the
     result. If no serial connection is provided, attempts to autodetect the
     device.
 
     For this to work correctly, a particular sequence of commands needs to be
     sent to put the device into a good state to process the incoming command.
 
-    Returns the stdout and stderr output from the micro:bit.
+    Returns the stdout and stderr output from the Pixel Kit.
     """
     close_serial = False
     if serial is None:
@@ -167,7 +167,7 @@ def clean_error(err):
 
 def ls(serial=None):
     """
-    List the files on the micro:bit.
+    List the files on the Pixel Kit.
 
     If no serial object is supplied, microfs will attempt to detect the
     connection itself.
@@ -186,7 +186,7 @@ def ls(serial=None):
 
 def rm(filename, serial=None):
     """
-    Removes a referenced file on the micro:bit.
+    Removes a referenced file on the Pixel Kit.
 
     If no serial object is supplied, microfs will attempt to detect the
     connection itself.
@@ -206,7 +206,7 @@ def rm(filename, serial=None):
 def put(filename, target=None, serial=None):
     """
     Puts a referenced file on the LOCAL file system onto the
-    file system on the BBC micro:bit.
+    file system on the Pixel Kit.
 
     If no serial object is supplied, microfs will attempt to detect the
     connection itself.
