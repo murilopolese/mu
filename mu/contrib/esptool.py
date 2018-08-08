@@ -36,6 +36,22 @@ import serial.tools.list_ports as list_ports
 
 import serial
 
+from PyQt5.QtCore import QObject, pyqtSignal
+
+
+class Logger(QObject):
+    on_data = pyqtSignal(str)
+    def log(self, msg):
+        self.on_data.emit(msg)
+console = Logger()
+
+_print = print
+def print(*args, end='\n'):
+    for arg in args:
+        console.log(arg)
+    out = list(args)
+    _print(','.join(out))
+
 # check 'serial' is 'pyserial' and not 'serial' https://github.com/espressif/esptool/issues/269
 try:
     if "serialization" in serial.__doc__ and "deserialization" in serial.__doc__:
@@ -2304,7 +2320,7 @@ def version(args):
 #
 
 
-def main():
+def main(p_args=None):
     parser = argparse.ArgumentParser(description='esptool.py v%s - ESP8266 ROM Bootloader Utility' % __version__, prog='esptool')
 
     parser.add_argument('--chip', '-c',
@@ -2509,7 +2525,10 @@ def main():
 
     expand_file_arguments()
 
-    args = parser.parse_args()
+    if p_args:
+        args = p_args
+    else:
+        args = parser.parse_args()
 
     print('esptool.py v%s' % __version__)
 

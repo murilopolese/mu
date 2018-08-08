@@ -23,13 +23,13 @@ import sys
 import os.path
 import logging
 import semver
-import subprocess
 from time import sleep
+from argparse import Namespace
 from tokenize import TokenError
 from mu.logic import HOME_DIRECTORY
-from mu.contrib import uflash
+from mu.contrib import uflash, esptool
 from mu.contrib import pixelfs as pixelfs
-from mu.modes.api import MICROBIT_APIS, SHARED_APIS
+from mu.modes.api import SHARED_APIS
 from mu.modes.base import MicroPythonMode
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, QTimer
 from PyQt5.QtWidgets import QMessageBox
@@ -45,56 +45,18 @@ class DeviceFlasher(QThread):
     """
     # Emitted when flashing the Pixel Kit fails for any reason.
     on_flash_fail = pyqtSignal(str)
-    on_step = pyqtSignal(str)
+    on_data = pyqtSignal(str)
+
+    port = None
+    esp = None
 
     def __init__(self, port):
         QThread.__init__(self)
         self.port = port
-
-    def erase_flash(self):
-        erase_flash = 'python mu/contrib/esptool.py --baud 921600 --port {0} erase_flash'.format(self.port)
-        p = subprocess.Popen(erase_flash, stdout=subprocess.PIPE, shell=True)
-        result = b''
-        while True:
-            out = p.stdout.readline()
-            if out == b'' and p.poll() != None:
-                break
-            if out != b'':
-                logger.info(out)
-                result += out
-                self.on_step.emit("{0}: {1}".format(_("Erasing flash"), out.decode('utf-8')))
-        return result
-
-    def write_flash(self, fname=''):
-        write_flash = 'python mu/contrib/esptool.py --baud 921600 --port {0} write_flash 0x1000 {1}'.format(self.port, fname)
-        p = subprocess.Popen(write_flash, stdout=subprocess.PIPE, shell=True)
-        result = b''
-        line = b''
-        while True:
-            out = p.stdout.read(1)
-            if out == b'' and p.poll() != None:
-                break
-            if out != b'':
-                if out == b'\r' or out == b'\n':
-                    logger.info(line)
-                    self.on_step.emit("{0}: {1}".format(_("Writing flash"), line.decode('utf-8')))
-                    result += line
-                    line = b''
-                else:
-                    line += out
-        return result
-
-    def download_firmware(self):
-        import tempfile
-        import urllib.request
-        # Check if there is internet connection
-        url = 'http://micropython.org/resources/firmware/esp32-20180511-v1.9.4.bin'
-        f = tempfile.NamedTemporaryFile()
-        f.close()
-        logger.info("Downloading firmware to {0}".format(f.name))
-        self.on_step.emit(_("Downloading firmware."))
-        urllib.request.urlretrieve(url, f.name)
-        return f.name
+        esp = esptool.ESPLoader.detect_chip(self.port, 115200, False)
+        if not esp:
+            raise
+        self.esp = esp.run_stub()
 
     def run(self):
         """
@@ -102,13 +64,77 @@ class DeviceFlasher(QThread):
         """
         try:
             filename = self.download_firmware()
-            erase_result = self.erase_flash()
-            write_result = self.write_flash(filename)
+            self.erase_flash()
+            self.write_flash(filename)
         except Exception as ex:
             # Catch everything so Mu can recover from all of the wide variety
             # of possible exceptions that could happen at this point.
             logger.error(ex)
             self.on_flash_fail.emit(str(ex))
+
+    def download_firmware(self):
+        self.on_data.emit(_("Downloading MicroPython firmware"))
+        logger.info("Downloading MicroPython firmware")
+        import tempfile
+        import urllib.request
+        # Check if there is internet connection
+        url = 'http://micropython.org/resources/firmware/esp32-20180511-v1.9.4.bin'
+        f = tempfile.NamedTemporaryFile()
+        f.close()
+        urllib.request.urlretrieve(url, f.name)
+        logger.info("Downloed MicroPython firmware to: {0}".format(f.name))
+        return f.name
+
+    def erase_flash(self):
+        self.on_data.emit(_("Erasing flash memory"))
+        logger.info("Erasing flash memory")
+        arguments = Namespace(
+            after='hard_reset',
+            baud=921600,
+            before='default_reset',
+            chip='auto',
+            no_stub=False,
+            operation='erase_flash',
+            override_vddsdio=None,
+            port=self.port,
+            spi_connection=None,
+            trace=False
+        )
+        esptool.main(arguments)
+
+    def write_flash(self, fname=''):
+        self.on_data.emit(_("Writing MicroPython to flash memory"))
+        logger.info("Writing MicroPython to flash memory")
+        arguments = Namespace(
+            addr_filename=None,
+            after='hard_reset',
+            baud=921600,
+            before='default_reset',
+            chip='auto',
+            compress=None,
+            flash_freq='keep',
+            flash_mode='keep',
+            flash_size='detect',
+            no_compress=False,
+            no_progress=False,
+            no_stub=False,
+            operation='write_flash',
+            override_vddsdio=None,
+            port=self.port,
+            spi_connection=None,
+            trace=False,
+            verify=False
+        )
+        add_addr_filename = esptool.AddrFilenamePairAction(
+            option_strings=[],
+            dest='addr_filename'
+        )
+        add_addr_filename(
+            parser=None,
+            namespace=arguments, # correct `addr_filename` will be set
+            values=['0x1000', fname]
+        )
+        esptool.main(arguments)
 
 
 class FileManager(QObject):
@@ -157,18 +183,18 @@ class FileManager(QObject):
             logger.exception(ex)
             self.on_list_fail.emit()
 
-    def get(self, microbit_filename, local_filename):
+    def get(self, board_filename, local_filename):
         """
         Get the referenced Pixel Kit filename and save it to the local
         filename. Emit the name of the filename when complete or emit a
         failure signal.
         """
         try:
-            pixelfs.get(microbit_filename, local_filename)
-            self.on_get_file.emit(microbit_filename)
+            pixelfs.get(board_filename, local_filename)
+            self.on_get_file.emit(board_filename)
         except Exception as ex:
             logger.error(ex)
-            self.on_get_fail.emit(microbit_filename)
+            self.on_get_fail.emit(board_filename)
 
     def put(self, local_filename):
         """
@@ -183,17 +209,17 @@ class FileManager(QObject):
             logger.error(ex)
             self.on_put_fail.emit(local_filename)
 
-    def delete(self, microbit_filename):
+    def delete(self, board_filename):
         """
         Delete the referenced file on the Pixel Kit's filesystem. Emit the name
         of the file when complete, or emit a failure signal.
         """
         try:
-            pixelfs.rm(microbit_filename)
-            self.on_delete_file.emit(microbit_filename)
+            pixelfs.rm(board_filename)
+            self.on_delete_file.emit(board_filename)
         except Exception as ex:
             logger.error(ex)
-            self.on_delete_fail.emit(microbit_filename)
+            self.on_delete_fail.emit(board_filename)
 
 class PixelKitMode(MicroPythonMode):
     """
@@ -306,13 +332,14 @@ class PixelKitMode(MicroPythonMode):
             if port:
                 self.set_buttons(mpflash=False, mpfiles=False, run=False, stop=False, repl=False)
                 self.flash_thread = DeviceFlasher(port)
+
                 self.flash_thread.finished.connect(self.flash_finished)
                 self.flash_thread.on_flash_fail.connect(self.flash_failed)
-                self.flash_thread.on_step.connect(self.on_step)
+                self.flash_thread.on_data.connect(self.on_flash_data)
+                esptool.console.on_data.connect(self.on_flash_data)
                 self.flash_thread.start()
             else:
                 self.flash_failed('No Pixel Kit was found.')
-
 
     def flash_finished(self):
         self.set_buttons(mpflash=True, mpfiles=True, run=True, stop=True, repl=True)
@@ -326,6 +353,7 @@ class PixelKitMode(MicroPythonMode):
         logger.info('Flash finished.')
         self.flash_thread = None
         self.flash_timer = None
+        esptool.console.on_data.disconnect(self.on_flash_data)
 
     def flash_failed(self, error):
         self.set_buttons(mpflash=True, mpfiles=True, run=True, stop=True, repl=True)
@@ -341,8 +369,9 @@ class PixelKitMode(MicroPythonMode):
             self.flash_timer.stop()
             self.flash_timer = None
         self.flash_thread = None
+        esptool.console.on_data.disconnect(self.on_flash_data)
 
-    def on_step(self, message):
+    def on_flash_data(self, message):
         self.editor.show_status_message(message)
 
     def toggle_repl(self, event):
