@@ -5,6 +5,7 @@ from mu.modes.api import ESP_APIS, SHARED_APIS
 from mu.contrib.pyboard import Pyboard, PyboardError
 import mu.contrib.files as files
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, QTimer
+from time import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,20 @@ class ESPMode(MicroPythonMode):
         """
         buttons = [
             {
+                'name': 'run',
+                'display_name': _('Run'),
+                'description': _('Run current tab code onto the ESP8266/ESP32.'),
+                'handler': self.run,
+                'shortcut': 'F5',
+            },
+            {
+                'name': 'stop',
+                'display_name': _('Stop'),
+                'description': _('Stop current code running on the ESP8266/ESP32.'),
+                'handler': self.stop,
+                'shortcut': 'F5',
+            },
+            {
                 'name': 'flash',
                 'display_name': _('Flash'),
                 'description': _('Flash your code onto the ESP8266/ESP32.'),
@@ -218,6 +233,32 @@ class ESPMode(MicroPythonMode):
                             "try again.")
             self.view.show_message(message, information)
 
+    def run(self):
+        if not self.repl:
+            self.toggle_repl(self)
+        code = self.view.current_tab.text()
+        self.stop()
+        self.enter_raw_repl()
+        self.view.serial.write(bytes(code, 'ascii'))
+        sleep(0.01)
+        self.exit_raw_repl()
+
+    def stop(self):
+        if not self.repl:
+            self.toggle_repl(self)
+        self.view.serial.write(b'\r\x03\x03') # ctrl-C twice: interrupt any running program
+        self.view.serial.write(b'\x02') # CTRL-B: Exit raw repl
+
+    def enter_raw_repl(self):
+        self.view.serial.write(b'\x01') # CTRL-A
+        sleep(0.01)
+
+    def exit_raw_repl(self):
+        self.view.serial.write(b'\x04')  # CTRL-D
+        sleep(0.01)
+        self.view.serial.write(b'\x02')  # CTRL-B
+        sleep(0.01)
+
     def flash(self):
         """
         Takes the currently active tab, compiles the Python script therein into
@@ -271,7 +312,7 @@ class ESPMode(MicroPythonMode):
             # Always write to "main.py" when flashing, regardless of filename
             # (similar to micro:bit mode)
             self.flash_thread = DeviceFlasher(pyboard,
-                                              "main.py",
+                                              filename,
                                               python_script)
 
             self.flash_thread.finished.connect(self.flash_finished)
